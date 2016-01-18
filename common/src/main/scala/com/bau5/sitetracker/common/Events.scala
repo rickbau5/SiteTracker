@@ -14,9 +14,14 @@ object Events {
 
   sealed trait Mutator
 
-  case class Connect(user: User) extends ServerRequest
-  case class Disconnect(user: User) extends ServerRequest
+  case class Connect() extends ServerRequest
+  case class ConnectionSuccessful() extends Response
+
+  case class Login(user: User) extends ServerRequest
+  case class Logout(user: User) extends ServerRequest
+
   case class Message(contents: String) extends Response
+  case class ServerMessage(contents: String) extends ServerRequest
 
   case class SeeSystemRequest(system: String) extends ServerRequest
   case class SeeSystemResponse(entries: Option[List[AnomalyEntry]]) extends Response

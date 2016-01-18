@@ -2,35 +2,45 @@ package com.bau5.sitetracker.server
 
 import java.io.{File, PrintWriter}
 
-import akka.actor.Actor
-import com.bau5.sitetracker.common.EntryDetails.{AnomalyEntry, SSystem, User}
+import akka.actor.{ActorIdentity, Identify, Actor}
+import com.bau5.sitetracker.common.EntryDetails._
 import com.bau5.sitetracker.common.Events._
+import org.joda.time.DateTime
 
 import scala.collection.mutable
+import scala.io.Source
 import scala.util.Success
 
 /**
   * Created by Rick on 1/15/16.
   */
-class SiteTrackerServerActor extends Actor {
+class ServerActor extends Actor {
   var entries = mutable.Map.empty[SSystem, List[AnomalyEntry]]
 
   @throws[Exception](classOf[Exception])
   override def preStart(): Unit = {
-//    populateTestInput
+    loadMap("/Users/Rick/testOutput.tsv")
   }
 
   override def receive: Receive = {
-    case Connect(user) =>
+    case Login(user) =>
       println(s"User [$user] connected.")
       sender ! Message(s"Welcome [${user.username}].")
 
-    case Disconnect(user) =>
+    case Logout(user) =>
       println(s"User [$user] disconnected.")
       sender ! Message(s"Logged [${user.username}] out.")
 
+    case Connect() =>
+      println(s"Got a new connection [$sender]")
+      sender ! ConnectionSuccessful()
+
     case Message(msg) =>
-      println(s"Driver got $msg")
+      println(s"Got message [$msg] from [$sender]")
+
+    case ServerMessage(msg) =>
+      println(s"Got [$msg] from [$sender]")
+      if (msg == "Ping") sender ! Message("Pong")
 
     case DownloadEntriesRequest() =>
       println(s"Got download request from [$sender]")
@@ -53,6 +63,7 @@ class SiteTrackerServerActor extends Actor {
       println(s"Got save request from [$sender]")
       saveMap(entries)
       sender ! Message("Saved successfully.")
+
     case mut: Request if mut.isInstanceOf[Mutator] =>
       receiveMutator(mut)
 
@@ -107,19 +118,6 @@ class SiteTrackerServerActor extends Actor {
     map += (newEntry._1 -> newValue)
   }
 
-  def populateTestInput = {
-    val testInput = List(
-      "Tamo RMZ-630 'Provisional Gurista Outpost' Combat",
-      "Tamo XKR-091 'Regional Guristas Data Processing Center' Data",
-      "Tamo GGU-898 'Decayed Guristas Mass Grave' Relic",
-      "Dabas XXA-444 'Guristas Port Authority' Combat",
-      "Dabas WOR-123 'NA' Wormhole"
-    )
-//    val successful = testInput.map(input => com.bau5.sitetracker.Main.parseEntry(input, User("TestUser")))
-//      .collect { case Success(v) => v }
-//    successful foreach (e => addEntry(e, entries))
-  }
-
   def saveMap(map: mutable.Map[SSystem, List[AnomalyEntry]]) = {
     val header = "system,id,name,type,user,time\n"
     val output = map.flatMap(group => group._2.map(b => s"${group._1.name},${b.stringify}\n"))
@@ -130,5 +128,25 @@ class SiteTrackerServerActor extends Actor {
     writer.close()
 
     println("Saved map.")
+  }
+
+  def loadMap(source: String) = {
+    val loaded = Source.fromFile(source)
+      .getLines.toList.tail
+      .map(_.split(","))
+      .map { line =>
+        SSystem(line(0)) ->
+          AnomalyEntry(
+            User(line(4)),
+            Anomaly(
+              Identifier(line(1)),
+              Name(line(2)),
+              Type(line(3))
+            ),
+            new DateTime(line(5).toLong)
+          )
+      }.groupBy(_._1)
+      .map(kv => kv._1 -> kv._2.map(_._2))
+    entries = mutable.Map(loaded.toSeq: _*)
   }
 }
