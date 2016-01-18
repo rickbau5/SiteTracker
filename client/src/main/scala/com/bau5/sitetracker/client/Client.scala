@@ -3,7 +3,7 @@ package com.bau5.sitetracker.client
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 
-import akka.actor.PoisonPill
+import akka.actor.{Props, PoisonPill}
 import akka.util.Timeout
 import com.bau5.sitetracker.common.EntryDetails._
 import com.bau5.sitetracker.common.Events._
@@ -30,8 +30,8 @@ class Client(systemName: String = "ClientSystem",
   def inputLoop(): Unit = {
     var user = User("system")
 
-    val driver = newActor[ClientActor]("clientDriver")
-    Try(await[ConnectionSuccessful](Connect(), driver)) match {
+    val driver = actorSystem.actorOf(Props[ClientActor], "clientDriver")
+    Try(await[ConnectionSuccessful](Connect(driver), driver)) match {
       case Failure(ex) => println("Server not responding.")
       case Success(_) => println("Connected to server.");
     }
@@ -62,7 +62,7 @@ class Client(systemName: String = "ClientSystem",
 
       // List all systems
       case "list" =>
-        val response = await[ListSystemsResponse](ListSystemsRequest(), driver)
+        val response = await[ListSystemsResponse](ListSystemsRequest, driver)
         println(response.systems.map(e => s" :${e._1.name} - ${e._2}").mkString("\n"))
 
       // Add a new entry
@@ -101,7 +101,7 @@ class Client(systemName: String = "ClientSystem",
       // Download the current list of entries
       case "download" =>
         val ret = await[DownloadEntriesResponse](
-            DownloadEntriesRequest(),
+            DownloadEntriesRequest,
             driver
           ).entries
         val selection = new StringSelection(ret.mkString(""))
@@ -111,13 +111,12 @@ class Client(systemName: String = "ClientSystem",
       // Quit
       case "quit" =>
         println(s"Bye ${user.username}")
-        await[Message](SaveRequest(), driver)
-        driver ! Logout(user)
+        await[Message](Quit(driver), driver)
         driver ! PoisonPill
         sys.exit(0)
 
       case "save" =>
-        val ret = await[Message](SaveRequest(), driver)
+        val ret = await[Message](SaveRequest, driver)
         println(ret.contents)
 
       // Default and unknown case

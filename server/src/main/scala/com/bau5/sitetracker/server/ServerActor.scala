@@ -2,7 +2,7 @@ package com.bau5.sitetracker.server
 
 import java.io.{File, PrintWriter}
 
-import akka.actor.{ActorIdentity, Identify, Actor}
+import akka.actor.{ActorPath, ActorIdentity, Identify, Actor}
 import com.bau5.sitetracker.common.EntryDetails._
 import com.bau5.sitetracker.common.Events._
 import org.joda.time.DateTime
@@ -16,24 +16,39 @@ import scala.util.Success
   */
 class ServerActor extends Actor {
   var entries = mutable.Map.empty[SSystem, List[AnomalyEntry]]
+  var actors = mutable.ListBuffer.empty[ActorPath]
 
-  @throws[Exception](classOf[Exception])
-  override def preStart(): Unit = {
-    loadMap("/Users/Rick/testOutput.tsv")
-  }
+  var saveLocation: String = context.system.settings.config.getString("server.save-location")
 
   override def receive: Receive = {
     case Login(user) =>
-      println(s"User [$user] connected.")
+      println(s"User [$user] logged in.")
       sender ! Message(s"Welcome [${user.username}].")
 
     case Logout(user) =>
-      println(s"User [$user] disconnected.")
+      println(s"User [$user] logged out.")
       sender ! Message(s"Logged [${user.username}] out.")
 
-    case Connect() =>
-      println(s"Got a new connection [$sender]")
+    case Connect(ref) =>
+      println(s"Got a new connection [$ref]")
+      actors += ref.path
+      println(ref.path)
       sender ! ConnectionSuccessful()
+
+    case Disconnect(ref) =>
+      println(s"Client disconnect [$ref]")
+      actors -= ref.path
+      println("Active actors is now" + actors)
+
+    case Quit(ref) =>
+      println(s"[$ref] is quitting.")
+      saveMap(entries, saveLocation)
+      actors -= ref.path
+      sender ! Message(s"Successfully disassociated.")
+
+    case MessageAll(msg) =>
+      println(s"Sending [$msg] to all clients.")
+      actors foreach (e => context.actorSelection(e) ! msg)
 
     case Message(msg) =>
       println(s"Got message [$msg] from [$sender]")
@@ -42,7 +57,7 @@ class ServerActor extends Actor {
       println(s"Got [$msg] from [$sender]")
       if (msg == "Ping") sender ! Message("Pong")
 
-    case DownloadEntriesRequest() =>
+    case DownloadEntriesRequest =>
       println(s"Got download request from [$sender]")
       sender ! DownloadEntriesResponse(
         entries.flatMap { group =>
@@ -50,7 +65,7 @@ class ServerActor extends Actor {
         }.toList
       )
 
-    case ListSystemsRequest() =>
+    case ListSystemsRequest =>
       println(s"Got list request from [$sender]")
       sender ! ListSystemsResponse(entries.map(e => (e._1, e._2.size)).toList)
 
@@ -59,13 +74,18 @@ class ServerActor extends Actor {
       println(s"Got system request for [$sys] from [$sender]. Sending response: " + ret)
       sender ! SeeSystemResponse(ret)
 
-    case SaveRequest() =>
+    case SaveRequest =>
       println(s"Got save request from [$sender]")
-      saveMap(entries)
+      saveMap(entries, saveLocation)
       sender ! Message("Saved successfully.")
 
     case mut: Request if mut.isInstanceOf[Mutator] =>
       receiveMutator(mut)
+
+    case LoadSavedData =>
+      println(s"Loading data from [$saveLocation)]")
+      loadMap(saveLocation)
+      println(s"Loaded ${entries.map(_._2.size).sum} entries.")
 
     case _ =>
       println("Unhandled type.")
@@ -74,7 +94,7 @@ class ServerActor extends Actor {
 
   def receiveMutator: Receive = {
     val ret = handleMutator
-    saveMap(entries)
+    saveMap(entries, saveLocation)
     ret
   }
 
@@ -118,7 +138,7 @@ class ServerActor extends Actor {
     map += (newEntry._1 -> newValue)
   }
 
-  def saveMap(map: mutable.Map[SSystem, List[AnomalyEntry]]) = {
+  def saveMap(map: mutable.Map[SSystem, List[AnomalyEntry]], file: String) = {
     val header = "system,id,name,type,user,time\n"
     val output = map.flatMap(group => group._2.map(b => s"${group._1.name},${b.stringify}\n"))
 
@@ -150,3 +170,5 @@ class ServerActor extends Actor {
     entries = mutable.Map(loaded.toSeq: _*)
   }
 }
+
+case object LoadSavedData

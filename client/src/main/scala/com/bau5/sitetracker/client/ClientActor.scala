@@ -19,7 +19,8 @@ class ClientActor extends Actor with ActorLogging {
 
   @throws[Exception](classOf[Exception])
   override def preStart(): Unit = {
-    remoteActorSelection = context.actorSelection("akka.tcp://ServerSystem@127.0.0.1:5150/user/server")
+    val host = context.system.settings.config.getString("akka.remote.netty.tcp.hostname")
+    remoteActorSelection = context.actorSelection(s"akka.tcp://ServerSystem@$host:5150/user/server")
   }
 
   override def receive: Receive = {

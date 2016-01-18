@@ -16,7 +16,8 @@ import scala.reflect.ClassTag
   */
 abstract class BaseProvider(systemName: String,
                             configName: String) extends SystemProvider with ActorProvider {
-  implicit val actorSystem = initSystem(systemName, loadConfig(configName))
+  val config = loadConfig(configName)
+  implicit val actorSystem = initSystem(systemName, config)
 
   def loadConfig(configName: String): Config = configName match {
     case "" => ConfigFactory.load()
