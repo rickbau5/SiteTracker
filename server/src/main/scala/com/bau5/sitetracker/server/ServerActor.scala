@@ -114,7 +114,11 @@ class ServerActor extends Actor {
           sender ! RemoveEntryResponse(false)
         case Some(list) =>
           val newEntries = list.filter(_.anomaly.ident != ident)
-          entries += system -> newEntries
+          if (newEntries.nonEmpty) {
+            entries += system -> newEntries
+          } else {
+            entries.remove(system)
+          }
           sender ! RemoveEntryResponse(newEntries.size != list.size)
       }
 
