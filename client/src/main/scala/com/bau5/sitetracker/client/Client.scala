@@ -9,6 +9,7 @@ import com.bau5.sitetracker.common.EntryDetails._
 import com.bau5.sitetracker.common.Events._
 import com.bau5.sitetracker.common.BaseProvider
 import org.joda.time.DateTime
+import org.joda.time.format.DateTimeFormat
 
 import scala.concurrent.duration._
 import scala.io.StdIn
@@ -57,7 +58,30 @@ class Client(systemName: String = "ClientSystem",
           case None => println("None")
           case Some(entries) =>
             println(sys)
-            entries foreach (e => println(s" :$e"))
+            val list = entries map { entry =>
+              val formatter = DateTimeFormat.forPattern("HH:mm:ss MM/dd/yyyy")
+              List(entry.anomaly.ident.id, entry.anomaly.name.name, entry.anomaly.typ.str,
+                    entry.timeRecorded.toString(formatter), entry.user.username)
+            }
+            val maxSizes = list.map(_.map(_.length))
+              .foldLeft(List(1, 1, 1, 1, 1)) { case (ls, entry) =>
+              def greater (a: Int, b: Int) = if (a > b) a else b
+              List(greater(ls.head, entry.head), greater(ls(1), entry(1)), greater(ls(2), entry(2)),
+                greater(ls(3), entry(3)), greater(ls(4), entry(4)))
+            }
+            val formatted = list.map { entry =>
+              def spaces(num: Int) = List.fill(num)(" ").mkString("")
+              entry.zip(0 until 5) map { attrib =>
+                val length = maxSizes.max - attrib._1.length
+                val cush = spaces(length)
+                val offset = cush.length % 2
+                cush.drop(length / 2) + attrib._1 + cush.drop(length / 2 + offset)
+              }
+            }
+            val horizontal = List.fill(maxSizes.max * maxSizes.size + 6)("-").mkString("")
+            println(horizontal)
+            formatted foreach (e => println("|" + e.mkString("|") + "|"))
+            println(horizontal)
         }
 
       // List all systems
@@ -123,7 +147,8 @@ class Client(systemName: String = "ClientSystem",
       case _ => println("Unknown input, try again.")
     }) match {
       case Success(_) =>
-      case Failure(_) => println("Failed parsing input.")
+      case Failure(ex) =>
+        println("Failed parsing input.")
     }
   }
 }

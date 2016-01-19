@@ -20,7 +20,7 @@ lazy val client = (project in file("client")).
   settings(
     name := "SiteTrackerClient",
     mainClass := Some("com.bau5.sitetracker.client.Main")
-  ).aggregate(common)
+  )
 
 lazy val server = (project in file("server")).
   dependsOn(common).
@@ -28,7 +28,7 @@ lazy val server = (project in file("server")).
   settings(
     name := "SiteTrackerServer",
     mainClass := Some("com.bau5.sitetracker.server.Main")
-  ).aggregate(common)
+  )
 
 lazy val common = (project in file("common")).
   settings(commonSettings: _*).

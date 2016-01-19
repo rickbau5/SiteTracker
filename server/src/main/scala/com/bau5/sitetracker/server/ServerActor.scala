@@ -85,7 +85,9 @@ class ServerActor extends Actor {
     case LoadSavedData =>
       println(s"Loading data from [$saveLocation)]")
       loadMap(saveLocation)
-      println(s"Loaded ${entries.map(_._2.size).sum} entries.")
+      if (entries.nonEmpty) {
+        println(s"Loaded ${entries.map(_._2.size).sum} entries.")
+      }
 
     case _ =>
       println("Unhandled type.")
@@ -142,7 +144,7 @@ class ServerActor extends Actor {
     val header = "system,id,name,type,user,time\n"
     val output = map.flatMap(group => group._2.map(b => s"${group._1.name},${b.stringify}\n"))
 
-    val writer = new PrintWriter(new File("/Users/Rick/testOutput.tsv"))
+    val writer = new PrintWriter(new File(file))
     writer.write(header)
     output foreach (e => writer.write(e))
     writer.close()
