@@ -38,6 +38,16 @@ class Client(systemName: String = "ClientSystem",
     }
 
     while (true) Try(StdIn.readLine("> ") match {
+      // Quit
+      case "quit" =>
+        if (user.username != "system") {
+          println(s"Bye ${user.username}")
+        }
+        await[Message](Quit(driver), driver)
+        driver ! PoisonPill
+        sys.exit(0)
+
+      // Login
       case login(username) =>
         user = User(username)
         val response = await[Message](Login(user), driver)
@@ -131,13 +141,6 @@ class Client(systemName: String = "ClientSystem",
         val selection = new StringSelection(ret.mkString(""))
         Toolkit.getDefaultToolkit.getSystemClipboard.setContents(selection, selection)
         println("All entries copied to clipboard.")
-
-      // Quit
-      case "quit" =>
-        println(s"Bye ${user.username}")
-        await[Message](Quit(driver), driver)
-        driver ! PoisonPill
-        sys.exit(0)
 
       case "save" =>
         val ret = await[Message](SaveRequest, driver)
