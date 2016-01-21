@@ -103,9 +103,14 @@ class ServerActor extends Actor {
   def handleMutator: Receive = {
     case AddEntryRequest(entry) =>
       println(s"Got add entry request for [$entry] from [$sender]")
-      addEntry(entry, entries)
-      println("Successfully added entry.")
-      sender ! AddEntryResponse(true)
+      val response = addEntry(entry, entries)
+      if (response.isDefined) {
+        println("Entry added.")
+      } else {
+        println("Entry was not added.")
+      }
+      sender ! AddEntryResponse(response.isDefined)
+
 
     case EditEntryRequest(entry: (SSystem, Identifier), attributes) =>
       println(s"Got edit entry request for [$entry] with attributes [$attributes]")
@@ -146,19 +151,27 @@ class ServerActor extends Actor {
       sender ! RemoveAllEntriesResponse(old.isDefined)
   }
 
-  def addEntry(newEntry: (SSystem, AnomalyEntry), map: mutable.Map[SSystem, List[AnomalyEntry]]) = {
-    val newValue = map.getOrElse(newEntry._1, List.empty[AnomalyEntry]) match {
+  def addEntry(newEntry: (SSystem, AnomalyEntry), map: mutable.Map[SSystem, List[AnomalyEntry]]): Option[List[AnomalyEntry]] = {
+    val newValue = map.getOrElse(newEntry._1, List.empty[AnomalyEntry]) match {   // Find the system, or prepare empty list
       case Nil =>
         println("Adding " + newEntry._2)
         List(newEntry._2)
-      case list if !list.map(e => e.anomaly).contains(newEntry._2.anomaly) =>
+      case list if !list.map(e => e.anomaly.ident).contains(newEntry._2.anomaly.ident) => // Check if system has an entry by that id
         println("Adding " + newEntry._2)
-        (list ++ List(newEntry._2)).sortBy(_.anomaly.ident.id)
+        (list ++ List(newEntry._2)).sortBy(_.anomaly.ident.id)    // Sort list and return
       case list =>
-        println(s"Anomaly already logged. New '${newEntry._2}', old '${list.map(e => e.anomaly).filter(_ == newEntry._2)}'")
-        list
+        // Entry is already present, do nothing.
+        println(s"Anomaly already logged.")
+        List.empty
     }
-    map += (newEntry._1 -> newValue)
+
+    // If an entry was added, update map and return new list, else return none indicating no change.
+    if (newValue.nonEmpty) {
+      map += (newEntry._1 -> newValue)
+      Option(newValue)
+    } else {
+      None
+    }
   }
 
   def removeEntry(entry: (SSystem, Identifier), map: mutable.Map[SSystem, List[AnomalyEntry]]): Option[List[AnomalyEntry]] = {
