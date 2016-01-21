@@ -5,12 +5,13 @@ import java.awt.datatransfer.StringSelection
 
 import akka.actor.{Props, PoisonPill}
 import akka.util.Timeout
-import com.bau5.sitetracker.common.EntryDetails._
+import com.bau5.sitetracker.common.AnomalyDetails._
 import com.bau5.sitetracker.common.Events._
 import com.bau5.sitetracker.common.BaseProvider
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
 
+import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.io.StdIn
 import scala.util.{Failure, Success, Try}
@@ -22,9 +23,11 @@ class Client(systemName: String = "ClientSystem",
              configName: String = "") extends BaseProvider(systemName, configName) {
   implicit val timeout = Timeout(5 seconds)
 
+  val idFormat = "(\\w{3}-\\d{3})"
   val seeSystem = "see (.+)".r
-  val addEntry = raw"add (.+) (\w{3}-\d{3}) ('.+') (.+)".r
-  val removeOneEntry = raw"remove (.+) (\w{3}-\d{3})".r
+  val addEntry = s"add (.+) $idFormat ('.+') (.+)".r
+  val editEntry = s"edit (.+) $idFormat \\{(.+)\\}".r
+  val removeOneEntry = s"remove (.+) $idFormat".r
   val removeAllEntries = "remove all (.+)".r
   val login = "login (.+)".r
 
@@ -112,7 +115,33 @@ class Client(systemName: String = "ClientSystem",
             case false => println("Entry was not added.")
           }
 
-      // Remove Entry
+      // Edit an entry
+      case editEntry(system, id, attributes) =>
+        //edit Tamo BCS-123 { type = Combat, name = Guristas Vantage Point, id = BNV-123, system = Test System }
+        var buf = mutable.ListBuffer.empty[AnomalyDetail]
+
+        val tups = attributes.split(",")      // fold?
+          .map { e =>
+            val r = e.split("=")
+            (r.head.trim, r(1).trim)
+          }.foreach {
+            case (("system", syst)) => buf += SSystem(syst)
+            case ((  "name", name)) => buf += Name(name)
+            case ((  "type", typ))  => buf += Type(typ)
+            case ((    "id", idt))  => buf += Identifier(idFormat.r.findFirstIn(idt).get)  // Unsafe, fail if bad entry.
+          }
+
+        await[EditEntryResponse](
+          EditEntryRequest(
+            (SSystem(system), Identifier(id)),
+            buf.toList
+          ), driver
+        ).updatedEntry match {
+          case Some(ret) => println(s"Successfully updated to [$ret]")
+          case None => println("Nothing changed.")
+        }
+
+      // Remove an entry
       case removeOneEntry(system, id) =>
         await[RemoveEntryResponse](
             RemoveEntryRequest((SSystem(system), Identifier(id))),
@@ -151,6 +180,7 @@ class Client(systemName: String = "ClientSystem",
     }) match {
       case Success(_) =>
       case Failure(ex) =>
+        ex.printStackTrace()
         println("Failed parsing input.")
     }
   }

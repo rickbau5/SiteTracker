@@ -3,7 +3,7 @@ package com.bau5.sitetracker.server
 import java.io.{File, PrintWriter}
 
 import akka.actor.{ActorPath, ActorIdentity, Identify, Actor}
-import com.bau5.sitetracker.common.EntryDetails._
+import com.bau5.sitetracker.common.AnomalyDetails._
 import com.bau5.sitetracker.common.Events._
 import org.joda.time.DateTime
 
@@ -107,20 +107,37 @@ class ServerActor extends Actor {
       println("Successfully added entry.")
       sender ! AddEntryResponse(true)
 
-    case RemoveEntryRequest((system, ident)) =>
-      println(s"Got remove entry request for [$system-$ident)] from [$sender]")
-      entries.get(system) match {
+    case EditEntryRequest(entry: (SSystem, Identifier), attributes) =>
+      println(s"Got edit entry request for [$entry] with attributes [$attributes]")
+      val updated = entries.get(entry._1) match {   // Find entry matching the system
         case None =>
-          sender ! RemoveEntryResponse(false)
-        case Some(list) =>
-          val newEntries = list.filter(_.anomaly.ident != ident)
-          if (newEntries.nonEmpty) {
-            entries += system -> newEntries
-          } else {
-            entries.remove(system)
+          Option.empty[AnomalyEntry]
+        case Some(sys) =>
+          sys.find(_.anomaly.ident == entry._2) match {   // Find entry with that ID
+            case None =>
+              Option.empty[AnomalyEntry]
+            case Some(orig) =>
+              val system = attributes.find(_.isInstanceOf[SSystem])   // Get new system attrib if present
+                .map(_.asInstanceOf[SSystem])
+                .getOrElse(entry._1)
+
+              // Update the matched entry with new attributes
+              val ret = attributes.filter(_ != system).foldLeft(orig) { case (ent, attribute) =>
+                ent.update(attribute)
+              }
+
+              removeEntry(entry, entries)         // Remove the old entry
+              addEntry(system -> ret, entries)    // Add the updated entry
+              Option(ret)
           }
-          sender ! RemoveEntryResponse(newEntries.size != list.size)
       }
+      // Send response, None if nothing updated, Some(entry) of updated entry.
+      sender ! EditEntryResponse(updated)
+
+    case RemoveEntryRequest(entry) =>
+      println(s"Got remove entry request for [$entry)] from [$sender]")
+      val ret = removeEntry(entry, entries)
+      sender ! RemoveEntryResponse(ret.isDefined)
 
     case RemoveAllEntriesRequest(system) =>
       println(s"Got add entry request for [$system] from [$sender]")
@@ -142,6 +159,25 @@ class ServerActor extends Actor {
         list
     }
     map += (newEntry._1 -> newValue)
+  }
+
+  def removeEntry(entry: (SSystem, Identifier), map: mutable.Map[SSystem, List[AnomalyEntry]]): Option[List[AnomalyEntry]] = {
+    entries.get(entry._1) match {
+      case None =>
+        None
+      case Some(list) =>
+        val newEntries = list.filter(_.anomaly.ident != entry._2)
+        if (newEntries.size == list.size) {
+          None
+        } else {
+          if (newEntries.nonEmpty) {
+            entries += entry._1 -> newEntries
+            Option(newEntries)
+          } else {
+            entries.remove(entry._1)
+          }
+        }
+    }
   }
 
   def saveMap(map: mutable.Map[SSystem, List[AnomalyEntry]], file: String) = {
