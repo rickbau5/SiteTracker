@@ -31,6 +31,9 @@ object Events {
   case class SeeSystemRequest(system: String) extends ServerRequest
   case class SeeSystemResponse(entries: Option[List[AnomalyEntry]]) extends Response
 
+  case object SeeAllSystemsRequest extends ServerRequest
+  case class  SeeAllSystemsResponse(entries: Option[List[(SSystem, List[AnomalyEntry])]]) extends Response
+
   case object ListSystemsRequest extends ServerRequest
   case class  ListSystemsResponse(systems: List[(SSystem, Int)]) extends Response
 

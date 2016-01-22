@@ -74,6 +74,11 @@ class ServerActor extends Actor {
       println(s"Got system request for [$sys] from [$sender]. Sending response: " + ret)
       sender ! SeeSystemResponse(ret)
 
+    case SeeAllSystemsRequest =>
+      val ret = if (entries.nonEmpty) Option(entries.toList) else None
+      println(s"Got see all request from [$sender].")
+      sender ! SeeAllSystemsResponse(ret)
+
     case SaveRequest =>
       println(s"Got save request from [$sender]")
       saveMap(entries, saveLocation)

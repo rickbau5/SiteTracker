@@ -23,6 +23,8 @@ class Client(systemName: String = "ClientSystem",
              configName: String = "") extends BaseProvider(systemName, configName) {
   implicit val timeout = Timeout(5 seconds)
 
+  val formatter = DateTimeFormat.forPattern("HH:mm:ss MM/dd/yyyy")
+
   val idFormat = "(\\w{3}-\\d{3})"
   val seeSystem = "see (.+)".r
   val addEntry = s"add (.+) $idFormat ('.+') (.+)".r
@@ -64,43 +66,33 @@ class Client(systemName: String = "ClientSystem",
         println(response.contents)
         user = User("system")
 
+      // List all logged entries
+      case "see all" =>
+        val response = await[SeeAllSystemsResponse](SeeAllSystemsRequest, driver)
+        response.entries match {
+          case None => println("None")
+          case Some(entries) =>
+            entries foreach { case (k, v) =>
+              println(k.name)
+              formatAndPrint(v)
+            }
+        }
+
       // Lookup the entries in a system.
       case seeSystem(sys) =>
         val response = await[SeeSystemResponse](SeeSystemRequest(sys), driver)
         response.entries match {
           case None => println("None")
           case Some(entries) =>
-            println(sys)
-            val list = entries map { entry =>
-              val formatter = DateTimeFormat.forPattern("HH:mm:ss MM/dd/yyyy")
-              List(entry.anomaly.ident.id, entry.anomaly.name.name, entry.anomaly.typ.str,
-                    entry.timeRecorded.toString(formatter), entry.user.username)
-            }
-            val maxSizes = list.map(_.map(_.length))
-              .foldLeft(List(1, 1, 1, 1, 1)) { case (ls, entry) =>
-              def greater (a: Int, b: Int) = if (a > b) a else b
-              List(greater(ls.head, entry.head), greater(ls(1), entry(1)), greater(ls(2), entry(2)),
-                greater(ls(3), entry(3)), greater(ls(4), entry(4)))
-            }
-            val formatted = list.map { entry =>
-              def spaces(num: Int) = List.fill(num)(" ").mkString("")
-              entry.zip(0 until 5) map { attrib =>
-                val length = maxSizes.max - attrib._1.length
-                val cush = spaces(length)
-                val offset = cush.length % 2
-                cush.drop(length / 2) + attrib._1 + cush.drop(length / 2 + offset)
-              }
-            }
-            val horizontal = List.fill(maxSizes.max * maxSizes.size + 6)("-").mkString("")
-            println(horizontal)
-            formatted foreach (e => println("|" + e.mkString("|") + "|"))
-            println(horizontal)
+            formatAndPrint(entries)
         }
+
 
       // List all systems
       case "list" =>
         val response = await[ListSystemsResponse](ListSystemsRequest, driver)
         println(response.systems.map(e => s" :${e._1.name} - ${e._2}").mkString("\n"))
+
 
       // Add a new entry
       case addEntry(system, id, name, typ) =>
@@ -182,6 +174,35 @@ class Client(systemName: String = "ClientSystem",
       case Failure(ex) =>
         ex.printStackTrace()
         println("Failed parsing input.")
+    }
+  }
+
+  def formatAndPrint(entries: List[AnomalyEntry]) = {
+    val formatted = formatEntryList(entries)
+    val horizontal = List.fill(formatted.head.length + 2)("-").mkString   // Make the horizontal bar for top & bottom
+    println(horizontal)
+    formatted foreach (e => println("|" + e + "|"))       // Print out tables with nice formatting
+    println(horizontal)
+  }
+
+  def formatEntryList(entries: List[AnomalyEntry]): List[String] = {
+    val list = entries map { entry =>           // Stringify the entries
+      List(entry.anomaly.ident.id, entry.anomaly.name.name, entry.anomaly.typ.str,
+        entry.timeRecorded.toString(formatter), entry.user.username)
+    }
+    val maxSizes = list.map(_.map(_.length))    // Calculate the max box size
+      .foldLeft(List(1, 1, 1, 1, 1)) { case (ls, entry) =>
+        List(ls.head.max(entry.head), ls(1).max(entry(1)), ls(2).max(entry(2)),
+          ls(3).max(entry(3)), ls(4).max(entry(4)))
+      }
+    list.map { entry =>                         // Cushion the boxes so they are all the same size
+      def spaces(num: Int) = List.fill(num)(" ").mkString("")
+      entry.zip(0 until 5).map { attrib =>
+        val length = maxSizes.max - attrib._1.length
+        val cush = spaces(length)
+        val offset = cush.length % 2
+        cush.drop(length / 2) + attrib._1 + cush.drop(length / 2 + offset)
+      }.mkString("|")
     }
   }
 }
