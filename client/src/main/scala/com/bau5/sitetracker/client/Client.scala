@@ -9,7 +9,6 @@ import com.bau5.sitetracker.common.AnomalyDetails._
 import com.bau5.sitetracker.common.Events._
 import com.bau5.sitetracker.common.BaseProvider
 import org.joda.time.DateTime
-import org.joda.time.format.DateTimeFormat
 
 import scala.collection.mutable
 import scala.concurrent.duration._
@@ -22,8 +21,6 @@ import scala.util.{Failure, Success, Try}
 class Client(systemName: String = "ClientSystem",
              configName: String = "") extends BaseProvider(systemName, configName) {
   implicit val timeout = Timeout(5 seconds)
-
-  val formatter = DateTimeFormat.forPattern("HH:mm:ss MM/dd/yyyy")
 
   val idFormat = "(\\w{3}-\\d{3})"
   val seeSystem = "see (.+)".r
@@ -98,8 +95,12 @@ class Client(systemName: String = "ClientSystem",
       case addEntry(system, id, name, typ) =>
         val newEntry = SSystem(system) -> AnomalyEntry(
           user,
-          Anomaly(Identifier(id), Name(name.filterNot(_.toString == "'")), Type(typ)),
-          DateTime.now()
+          Anomaly(
+            Identifier(id),
+            Name(name.filterNot(_.toString == "'")),
+            Type(typ)),
+            Time(DateTime.now()
+            )
         )
         await[AddEntryResponse](AddEntryRequest(newEntry), driver)
           .wasSuccessful match {
@@ -188,7 +189,7 @@ class Client(systemName: String = "ClientSystem",
   def formatEntryList(entries: List[AnomalyEntry]): List[String] = {
     val list = entries map { entry =>           // Stringify the entries
       List(entry.anomaly.ident.id, entry.anomaly.name.name, entry.anomaly.typ.str,
-        entry.timeRecorded.toString(formatter), entry.user.username)
+        entry.timeRecorded.toString, entry.user.username)
     }
     val maxSizes = list.map(_.map(_.length))    // Calculate the max box size
       .foldLeft(List(1, 1, 1, 1, 1)) { case (ls, entry) =>

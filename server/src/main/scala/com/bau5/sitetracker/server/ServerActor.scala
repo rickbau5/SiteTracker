@@ -3,13 +3,14 @@ package com.bau5.sitetracker.server
 import java.io.{File, PrintWriter}
 
 import akka.actor.{ActorPath, ActorIdentity, Identify, Actor}
+import com.bau5.sitetracker.common.AnomalyDetails
 import com.bau5.sitetracker.common.AnomalyDetails._
 import com.bau5.sitetracker.common.Events._
 import org.joda.time.DateTime
 
 import scala.collection.mutable
 import scala.io.Source
-import scala.util.Success
+import scala.util.{Try, Success}
 
 /**
   * Created by Rick on 1/15/16.
@@ -215,6 +216,10 @@ class ServerActor extends Actor {
       .getLines.toList.tail
       .map(_.split(","))
       .map { line =>
+        val time = Try(AnomalyDetails.formatter.parseDateTime(line(5))).recover {
+          case ex => new DateTime(line(5).toLong)
+        }
+        println(time.get)
         SSystem(line(0)) ->
           AnomalyEntry(
             User(line(4)),
@@ -223,7 +228,7 @@ class ServerActor extends Actor {
               Name(line(2)),
               Type(line(3))
             ),
-            new DateTime(line(5).toLong)
+            Time(time.get)
           )
       }.groupBy(_._1)
       .map(kv => kv._1 -> kv._2.map(_._2))
