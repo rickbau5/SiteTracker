@@ -93,14 +93,14 @@ class Client(systemName: String = "ClientSystem",
 
       // Add a new entry
       case addEntry(system, id, name, typ) =>
-        val newEntry = SSystem(system) -> AnomalyEntry(
+        val newEntry = SSystem(system.head.toUpper + system.tail) -> AnomalyEntry(
           user,
           Anomaly(
             Identifier(id),
-            Name(name.filterNot(_.toString == "'")),
-            Type(typ)),
-            Time(DateTime.now()
-            )
+            Name(name.drop(1).dropRight(1)),
+            Type(typ)
+          ),
+          Time(DateTime.now())
         )
         await[AddEntryResponse](AddEntryRequest(newEntry), driver)
           .wasSuccessful match {
