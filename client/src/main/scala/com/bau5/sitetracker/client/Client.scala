@@ -199,7 +199,7 @@ class Client(systemName: String = "ClientSystem",
     list.map { entry =>                         // Cushion the boxes so they are all the same size
       def spaces(num: Int) = List.fill(num)(" ").mkString("")
       entry.zip(0 until 5).map { attrib =>
-        val length = maxSizes.max - attrib._1.length
+        val length = maxSizes(attrib._2) - attrib._1.length + 2
         val cush = spaces(length)
         val offset = cush.length % 2
         cush.drop(length / 2) + attrib._1 + cush.drop(length / 2 + offset)
