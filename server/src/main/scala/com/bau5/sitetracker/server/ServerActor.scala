@@ -24,11 +24,11 @@ class ServerActor extends Actor {
   override def receive: Receive = {
     case Login(user) =>
       println(s"User [$user] logged in.")
-      sender ! Message(s"Welcome [${user.username}].")
+      sender ! Message(s"Welcome [${user.value}].")
 
     case Logout(user) =>
       println(s"User [$user] logged out.")
-      sender ! Message(s"Logged [${user.username}] out.")
+      sender ! Message(s"Logged [${user.value}] out.")
 
     case Connect(ref) =>
       println(s"Got a new connection [$ref]")
@@ -62,7 +62,7 @@ class ServerActor extends Actor {
       println(s"Got download request from [$sender]")
       sender ! DownloadEntriesResponse(
         entries.flatMap { group =>
-          group._2.map(entry => s"${group._1.name},${entry.stringify}\n")
+          group._2.map(entry => s"${group._1.value},${entry.stringify}\n")
         }.toList
       )
 
@@ -164,7 +164,7 @@ class ServerActor extends Actor {
         List(newEntry._2)
       case list if !list.map(e => e.anomaly.ident).contains(newEntry._2.anomaly.ident) => // Check if system has an entry by that id
         println("Adding " + newEntry._2)
-        (list ++ List(newEntry._2)).sortBy(_.anomaly.ident.id)    // Sort list and return
+        (list ++ List(newEntry._2)).sortBy(_.anomaly.ident.value)    // Sort list and return
       case list =>
         // Entry is already present, do nothing.
         println(s"Anomaly already logged.")
@@ -201,7 +201,7 @@ class ServerActor extends Actor {
 
   def saveMap(map: mutable.Map[SSystem, List[AnomalyEntry]], file: String) = {
     val header = "system,id,name,type,user,time\n"
-    val output = map.flatMap(group => group._2.map(b => s"${group._1.name},${b.stringify}\n"))
+    val output = map.flatMap(group => group._2.map(b => s"${group._1.value},${b.stringify}\n"))
 
     val writer = new PrintWriter(new File(file))
     writer.write(header)

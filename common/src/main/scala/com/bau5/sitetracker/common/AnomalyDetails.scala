@@ -11,10 +11,10 @@ object AnomalyDetails {
 
   sealed trait AnomalyDetail
 
-  case class SSystem(name: String) extends AnomalyDetail
-  case class User(username: String) extends AnomalyDetail
-  case class Time(timeRecorded: DateTime) extends AnomalyDetail {
-    override def toString: String = timeRecorded.toString(formatter)
+  case class SSystem(value: String) extends AnomalyDetail
+  case class User(value: String) extends AnomalyDetail
+  case class Time(value: DateTime) extends AnomalyDetail {
+    override def toString: String = value.toString(formatter)
   }
 
   case class AnomalyEntry(user: User, anomaly: Anomaly, timeRecorded: Time) extends AnomalyDetail {
@@ -26,23 +26,23 @@ object AnomalyDetails {
         this
     }
     override def toString: String = {
-      s"Entry[User:${user.username}, $anomaly, Time:$timeRecorded]"
+      s"Entry[User:${user.value}, $anomaly, Time:$timeRecorded]"
     }
 
     def stringify: String = {
-      s"${anomaly.stringify},${user.username},${timeRecorded.toString}"
+      s"${anomaly.stringify},${user.value},${timeRecorded.toString}"
     }
   }
   case class Anomaly(ident: Identifier, name: Name, typ: Type)  extends AnomalyDetail {
     override def toString: String = {
-      s"Anomaly[ID:${ident.id}, Name:'${name.name}', Type:${typ.str}]"
+      s"Anomaly[ID:${ident.value}, Name:'${name.value}', Type:${typ.value}]"
     }
 
     def stringify: String = {
-      s"${ident.id},${name.name},${typ.str}"
+      s"${ident.value},${name.value},${typ.value}"
     }
   }
-  case class Identifier(id: String) extends AnomalyDetail
-  case class Name(name: String) extends AnomalyDetail
-  case class Type(str: String) extends AnomalyDetail
+  case class Identifier(value: String) extends AnomalyDetail
+  case class Name(value: String) extends AnomalyDetail
+  case class Type(value: String) extends AnomalyDetail
 }

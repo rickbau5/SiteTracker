@@ -42,8 +42,8 @@ class Client(systemName: String = "ClientSystem",
     while (true) Try(StdIn.readLine("> ") match {
       // Quit
       case "quit" =>
-        if (user.username != "system") {
-          println(s"Bye ${user.username}")
+        if (user.value != "system") {
+          println(s"Bye ${user.value}")
         }
         await[Message](Quit(driver), driver)
         driver ! PoisonPill
@@ -55,7 +55,7 @@ class Client(systemName: String = "ClientSystem",
         val response = await[Message](Login(user), driver)
         println(response.contents)
 
-      case _ if user.username == "system" =>
+      case _ if user.value == "system" =>
         println("Please login first.\nlogin [username]")
 
       case "logout" =>
@@ -70,7 +70,7 @@ class Client(systemName: String = "ClientSystem",
           case None => println("None")
           case Some(entries) =>
             entries foreach { case (k, v) =>
-              println(k.name)
+              println(k.value)
               formatAndPrint(v)
             }
         }
@@ -88,7 +88,7 @@ class Client(systemName: String = "ClientSystem",
       // List all systems
       case "list" =>
         val response = await[ListSystemsResponse](ListSystemsRequest, driver)
-        println(response.systems.map(e => s" :${e._1.name} - ${e._2}").mkString("\n"))
+        println(response.systems.map(e => s" :${e._1.value} - ${e._2}").mkString("\n"))
 
 
       // Add a new entry
@@ -104,7 +104,7 @@ class Client(systemName: String = "ClientSystem",
         )
         await[AddEntryResponse](AddEntryRequest(newEntry), driver)
           .wasSuccessful match {
-            case true => println(s"+${newEntry._1.name} ${newEntry._2}")
+            case true => println(s"+${newEntry._1.value} ${newEntry._2}")
             case false => println("Entry was not added.")
           }
 
@@ -188,8 +188,8 @@ class Client(systemName: String = "ClientSystem",
 
   def formatEntryList(entries: List[AnomalyEntry]): List[String] = {
     val list = entries map { entry =>           // Stringify the entries
-      List(entry.anomaly.ident.id, entry.anomaly.name.name, entry.anomaly.typ.str,
-        entry.timeRecorded.toString, entry.user.username)
+      List(entry.anomaly.ident.value, entry.anomaly.name.value, entry.anomaly.typ.value,
+        entry.timeRecorded.toString, entry.user.value)
     }
     val maxSizes = list.map(_.map(_.length))    // Calculate the max box size
       .foldLeft(List(1, 1, 1, 1, 1)) { case (ls, entry) =>
