@@ -80,6 +80,29 @@ class ServerActor extends Actor {
       println(s"Got see all request from [$sender].")
       sender ! SeeAllSystemsResponse(ret)
 
+    case FindEntriesRequest(attributes) =>
+      // Filters out all anomalies not containing the anomaly detail provided
+      def filterEntries(detail: AnomalyDetail, list: List[AnomalyEntry]): List[AnomalyEntry] = detail match {
+        case name: Name => list.filter(_.anomaly.name == name)
+        case id: Identifier => list.filter(_.anomaly.ident == id)
+        case typ: Type => list.filter(_.anomaly.typ == typ)
+        case user: User => list.filter(_.user == user)
+        case _ => List.empty[AnomalyEntry]    // Unsupported (Time, SSystem)
+      }
+
+      val matched = attributes.tail
+        .foldLeft(entries.map { entry =>                          // Initial filter
+            entry._1 -> filterEntries(attributes.head, entry._2)
+          }.toList
+        ) { case (matches, attribute) =>                          // Fold, filtering the list for each attribute
+          matches.map(entry => entry._1 -> filterEntries(attribute, entry._2))
+        }.filter(_._2.nonEmpty)
+
+      // If no entry matched all requirements, return None else return matches
+      val returned = if (matched.nonEmpty) Option(matched) else None
+
+      sender ! FindEntriesResponse(returned)
+
     case SaveRequest =>
       println(s"Got save request from [$sender]")
       saveMap(entries, saveLocation)

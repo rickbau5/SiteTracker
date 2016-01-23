@@ -7,10 +7,9 @@ import akka.actor.{Props, PoisonPill}
 import akka.util.Timeout
 import com.bau5.sitetracker.common.AnomalyDetails._
 import com.bau5.sitetracker.common.Events._
-import com.bau5.sitetracker.common.BaseProvider
+import com.bau5.sitetracker.common.{AnomalyDetails, BaseProvider}
 import org.joda.time.DateTime
 
-import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.io.StdIn
 import scala.util.{Failure, Success, Try}
@@ -26,6 +25,7 @@ class Client(systemName: String = "ClientSystem",
   val seeSystem = "see (.+)".r
   val addEntry = s"add (.+) $idFormat ('.+') (.+)".r
   val editEntry = s"edit (.+) $idFormat \\{(.+)\\}".r
+  val findEntries = "find \\{(.+)\\}".r
   val removeOneEntry = s"remove (.+) $idFormat".r
   val removeAllEntries = "remove all (.+)".r
   val login = "login (.+)".r
@@ -84,6 +84,19 @@ class Client(systemName: String = "ClientSystem",
             formatAndPrint(entries)
         }
 
+      case findEntries(attributeString) =>
+        val attributes = parseAttributes(attributeString)   // Parse the string into Anomaly Details
+        val response = await[FindEntriesResponse](FindEntriesRequest(attributes), driver)
+        response.entries match {
+          case None => println("No matching entries found.")
+          case Some(entries) =>
+            // If entries were found that match, print them.
+            entries foreach { case (system, ent) =>
+              println(system.value)
+              formatAndPrint(ent)
+            }
+
+        }
 
       // List all systems
       case "list" =>
@@ -111,18 +124,7 @@ class Client(systemName: String = "ClientSystem",
       // Edit an entry
       case editEntry(system, id, attributes) =>
         //edit Tamo BCS-123 { type = Combat, name = Guristas Vantage Point, id = BNV-123, system = Test System }
-        var buf = mutable.ListBuffer.empty[AnomalyDetail]
-
-        val tups = attributes.split(",")      // fold?
-          .map { e =>
-            val r = e.split("=")
-            (r.head.trim, r(1).trim)
-          }.foreach {
-            case (("system", syst)) => buf += SSystem(syst)
-            case ((  "name", name)) => buf += Name(name)
-            case ((  "type", typ))  => buf += Type(typ)
-            case ((    "id", idt))  => buf += Identifier(idFormat.r.findFirstIn(idt).get)  // Unsafe, fail if bad entry.
-          }
+        val buf = parseAttributes(attributes)
 
         await[EditEntryResponse](
           EditEntryRequest(
@@ -173,7 +175,6 @@ class Client(systemName: String = "ClientSystem",
     }) match {
       case Success(_) =>
       case Failure(ex) =>
-        ex.printStackTrace()
         println("Failed parsing input.")
     }
   }
@@ -205,5 +206,23 @@ class Client(systemName: String = "ClientSystem",
         cush.drop(length / 2) + attrib._1 + cush.drop(length / 2 + offset)
       }.mkString("|")
     }
+  }
+
+  def parseAttributes(attributesString: String): List[AnomalyDetail] = {
+    attributesString.split(",")
+      .map { e =>
+        val r = e.split("=")
+        (r.head.trim, r(1).trim)
+      }.foldLeft(List.empty[AnomalyDetail]) { case (list, stringAttribute) =>
+        stringAttribute match {
+          case (("system", syst)) => list ++ List(SSystem(syst))
+          case ((  "name", name)) => list ++ List(Name(name))
+          case ((  "type", typ))  => list ++ List(Type(typ))
+          case ((    "id", idt))  => list ++ List(Identifier(idFormat.r.findFirstIn(idt).get))  // Unsafe, fail if bad entry.
+          case tup =>
+            println(s"Unsupported attribute [${tup._1}]")
+            throw new IllegalArgumentException(s"Attribute ${tup._1} is not supported.")
+        }
+      }
   }
 }
