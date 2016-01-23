@@ -7,7 +7,7 @@ import akka.actor.{Props, PoisonPill}
 import akka.util.Timeout
 import com.bau5.sitetracker.common.AnomalyDetails._
 import com.bau5.sitetracker.common.Events._
-import com.bau5.sitetracker.common.{AnomalyDetails, BaseProvider}
+import com.bau5.sitetracker.common.BaseProvider
 import org.joda.time.DateTime
 
 import scala.concurrent.duration._
@@ -23,7 +23,7 @@ class Client(systemName: String = "ClientSystem",
 
   val idFormat = "(\\w{3}-\\d{3})"
   val seeSystem = "see (.+)".r
-  val addEntry = s"add (.+) $idFormat ('.+') (.+)".r
+  val addEntry = s"add (.+) $idFormat ('.*') (.+)".r
   val editEntry = s"edit (.+) $idFormat \\{(.+)\\}".r
   val findEntries = "find \\{(.+)\\}".r
   val removeOneEntry = s"remove (.+) $idFormat".r
@@ -95,13 +95,14 @@ class Client(systemName: String = "ClientSystem",
               println(system.value)
               formatAndPrint(ent)
             }
-
+            val matches = entries.map(_._2.size).sum
+            println(s"Found $matches matching " + { if (matches > 1) "entries." else "entry."})
         }
 
       // List all systems
       case "list" =>
         val response = await[ListSystemsResponse](ListSystemsRequest, driver)
-        println(response.systems.map(e => s" :${e._1.value} - ${e._2}").mkString("\n"))
+        println(response.systems.sortBy(_._1.value).map(e => s" :${e._1.value} - ${e._2}").mkString("\n"))
 
 
       // Add a new entry

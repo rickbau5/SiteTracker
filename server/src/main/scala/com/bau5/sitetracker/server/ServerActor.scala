@@ -81,6 +81,7 @@ class ServerActor extends Actor {
       sender ! SeeAllSystemsResponse(ret)
 
     case FindEntriesRequest(attributes) =>
+      println(s"Got find entries request from [${sender}]")
       // Filters out all anomalies not containing the anomaly detail provided
       def filterEntries(detail: AnomalyDetail, list: List[AnomalyEntry]): List[AnomalyEntry] = detail match {
         case name: Name => list.filter(_.anomaly.name == name)
@@ -100,7 +101,7 @@ class ServerActor extends Actor {
 
       // If no entry matched all requirements, return None else return matches
       val returned = if (matched.nonEmpty) Option(matched) else None
-
+      println(s"Found ${matched.map(_._2.size).sum} matches.")
       sender ! FindEntriesResponse(returned)
 
     case SaveRequest =>
@@ -242,7 +243,6 @@ class ServerActor extends Actor {
         val time = Try(AnomalyDetails.formatter.parseDateTime(line(5))).recover {
           case ex => new DateTime(line(5).toLong)
         }
-        println(time.get)
         SSystem(line(0)) ->
           AnomalyEntry(
             User(line(4)),
