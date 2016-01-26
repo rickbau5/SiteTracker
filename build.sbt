@@ -5,7 +5,8 @@ scalaVersion := "2.11.7"
 lazy val deps = Seq(
   "com.typesafe.akka" % "akka-remote_2.11" % "2.4.1",
   "com.github.nscala-time" %% "nscala-time" % "2.6.0",
-  "com.jsuereth" %% "scala-arm" % "1.4"
+  "com.jsuereth" %% "scala-arm" % "1.4",
+  "org.scala-lang.modules" % "scala-swing_2.11" % "2.0.0-M2"
 )
 
 lazy val commonSettings = Seq(
