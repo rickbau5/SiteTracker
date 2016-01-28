@@ -30,154 +30,159 @@ class Client(systemName: String = "ClientSystem",
   val removeAllEntries = "remove all (.+)".r
   val login = "login (.+)".r
 
-  def inputLoop(): Unit = {
-    var user = User("system")
+  val driver = actorSystem.actorOf(Props[ClientActor], "clientDriver")
+  var user: User = _
 
-    val driver = actorSystem.actorOf(Props[ClientActor], "clientDriver")
+  def init(): Client = {
     Try(await[ConnectionSuccessful](Connect(driver), driver)) match {
-      case Failure(ex) => println("Server not responding.")
-      case Success(_) => println("Connected to server.");
-    }
-
-    while (true) Try(StdIn.readLine("> ") match {
-      // Quit
-      case "quit" =>
-        if (user.value != "system") {
-          println(s"Bye ${user.value}")
-        }
-        await[Message](Quit(driver), driver)
-        driver ! PoisonPill
-        sys.exit(0)
-
-      // Login
-      case login(username) =>
-        user = User(username)
-        val response = await[Message](Login(user), driver)
-        println(response.contents)
-
-      case _ if user.value == "system" =>
-        println("Please login first.\nlogin [username]")
-
-      case "logout" =>
-        val response = await[Message](Logout(user), driver)
-        println(response.contents)
-        user = User("system")
-
-      // List all logged entries
-      case "see all" =>
-        val response = await[SeeAllSystemsResponse](SeeAllSystemsRequest, driver)
-        response.entries match {
-          case None => println("None")
-          case Some(entries) =>
-            entries foreach { case (k, v) =>
-              println(k.value)
-              formatAndPrint(v)
-            }
-        }
-
-      // Lookup the entries in a system.
-      case seeSystem(sys) =>
-        val response = await[SeeSystemResponse](SeeSystemRequest(sys), driver)
-        response.entries match {
-          case None => println("None")
-          case Some(entries) =>
-            formatAndPrint(entries)
-        }
-
-      case findEntries(attributeString) =>
-        val attributes = parseAttributes(attributeString)   // Parse the string into Anomaly Details
-        val response = await[FindEntriesResponse](FindEntriesRequest(attributes), driver)
-        response.entries match {
-          case None => println("No matching entries found.")
-          case Some(entries) =>
-            // If entries were found that match, print them.
-            entries foreach { case (system, ent) =>
-              println(system.value)
-              formatAndPrint(ent)
-            }
-            val matches = entries.map(_._2.size).sum
-            println(s"Found $matches matching " + { if (matches > 1) "entries." else "entry."})
-        }
-
-      // List all systems
-      case "list" =>
-        val response = await[ListSystemsResponse](ListSystemsRequest, driver)
-        println(response.systems.sortBy(_._1.value).map(e => s" :${e._1.value} - ${e._2}").mkString("\n"))
-
-
-      // Add a new entry
-      case addEntry(system, id, name, typ) =>
-        val newEntry = SSystem(system.head.toUpper + system.tail) -> AnomalyEntry(
-          user,
-          Anomaly(
-            Identifier(id),
-            Name(name.drop(1).dropRight(1)),
-            Type(typ)
-          ),
-          Time(DateTime.now())
-        )
-        await[AddEntryResponse](AddEntryRequest(newEntry), driver)
-          .wasSuccessful match {
-            case true => println(s"+${newEntry._1.value} ${newEntry._2}")
-            case false => println("Entry was not added.")
-          }
-
-      // Edit an entry
-      case editEntry(system, id, attributes) =>
-        //edit Tamo BCS-123 { type = Combat, name = Guristas Vantage Point, id = BNV-123, system = Test System }
-        val buf = parseAttributes(attributes)
-
-        await[EditEntryResponse](
-          EditEntryRequest(
-            (SSystem(system), Identifier(id)),
-            buf.toList
-          ), driver
-        ).updatedEntry match {
-          case Some(ret) => println(s"Successfully updated to [$ret]")
-          case None => println("Nothing changed.")
-        }
-
-      // Remove an entry
-      case removeOneEntry(system, id) =>
-        await[RemoveEntryResponse](
-            RemoveEntryRequest((SSystem(system), Identifier(id))),
-            driver
-          ).wasSuccessful match {
-            case true => println("Removed entry.")
-            case false => println("Entry was not removed. Not found?")
-          }
-
-      // Remove all entries for a system
-      case removeAllEntries(system) =>
-        await[RemoveAllEntriesResponse](
-            RemoveAllEntriesRequest(SSystem(system)),
-            driver
-          ).wasSuccessful match {
-            case true => println("Entries removed.")
-            case false => println("Entries were not removed. System not found?")
-          }
-
-      // Download the current list of entries
-      case "download" =>
-        val ret = await[DownloadEntriesResponse](
-            DownloadEntriesRequest,
-            driver
-          ).entries
-        val selection = new StringSelection(ret.mkString(""))
-        Toolkit.getDefaultToolkit.getSystemClipboard.setContents(selection, selection)
-        println("All entries copied to clipboard.")
-
-      case "save" =>
-        val ret = await[Message](SaveRequest, driver)
-        println(ret.contents)
-
-      // Default and unknown case
-      case _ => println("Unknown input, try again.")
-    }) match {
-      case Success(_) =>
       case Failure(ex) =>
-        println("Failed parsing input.")
+        println("Server not responding.")
+        throw new Exception("Server not responding")
+      case Success(_) =>
+        println("Connected to server.")
+        user = User("System")
+        this
     }
+  }
+
+  def handleInput(input: String): Unit = Try(input match {
+    // Quit
+    case "quit" =>
+      if (user.value != "system") {
+        println(s"Bye ${user.value}")
+      }
+      await[Message](Quit(driver), driver)
+      driver ! PoisonPill
+      sys.exit(0)
+
+    // Login
+    case login(username) =>
+      user = User(username)
+      val response = await[Message](Login(user), driver)
+      println(response.contents)
+
+    case _ if user.value == "system" =>
+      println("Please login first.\nlogin [username]")
+
+    case "logout" =>
+      val response = await[Message](Logout(user), driver)
+      println(response.contents)
+      user = User("system")
+
+    // List all logged entries
+    case "see all" =>
+      val response = await[SeeAllSystemsResponse](SeeAllSystemsRequest, driver)
+      response.entries match {
+        case None => println("None")
+        case Some(entries) =>
+          entries foreach { case (k, v) =>
+            println(k.value)
+            formatAndPrint(v)
+          }
+      }
+
+    // Lookup the entries in a system.
+    case seeSystem(sys) =>
+      val response = await[SeeSystemResponse](SeeSystemRequest(sys), driver)
+      response.entries match {
+        case None => println("None")
+        case Some(entries) =>
+          formatAndPrint(entries)
+      }
+
+    case findEntries(attributeString) =>
+      val attributes = parseAttributes(attributeString)   // Parse the string into Anomaly Details
+      val response = await[FindEntriesResponse](FindEntriesRequest(attributes), driver)
+      response.entries match {
+        case None => println("No matching entries found.")
+        case Some(entries) =>
+          // If entries were found that match, print them.
+          entries foreach { case (system, ent) =>
+            println(system.value)
+            formatAndPrint(ent)
+          }
+          val matches = entries.map(_._2.size).sum
+          println(s"Found $matches matching " + { if (matches > 1) "entries." else "entry."})
+      }
+
+    // List all systems
+    case "list" =>
+      val response = await[ListSystemsResponse](ListSystemsRequest, driver)
+      println(response.systems.sortBy(_._1.value).map(e => s" :${e._1.value} - ${e._2}").mkString("\n"))
+
+
+    // Add a new entry
+    case addEntry(system, id, name, typ) =>
+      val newEntry = SSystem(system.head.toUpper + system.tail) -> AnomalyEntry(
+        user,
+        Anomaly(
+          Identifier(id),
+          Name(name.drop(1).dropRight(1)),
+          Type(typ)
+        ),
+        Time(DateTime.now())
+      )
+      await[AddEntryResponse](AddEntryRequest(newEntry), driver)
+        .wasSuccessful match {
+          case true => println(s"+${newEntry._1.value} ${newEntry._2}")
+          case false => println("Entry was not added.")
+        }
+
+    // Edit an entry
+    case editEntry(system, id, attributes) =>
+      //edit Tamo BCS-123 { type = Combat, name = Guristas Vantage Point, id = BNV-123, system = Test System }
+      val buf = parseAttributes(attributes)
+
+      await[EditEntryResponse](
+        EditEntryRequest(
+          (SSystem(system), Identifier(id)),
+          buf.toList
+        ), driver
+      ).updatedEntry match {
+        case Some(ret) => println(s"Successfully updated to [$ret]")
+        case None => println("Nothing changed.")
+      }
+
+    // Remove an entry
+    case removeOneEntry(system, id) =>
+      await[RemoveEntryResponse](
+          RemoveEntryRequest((SSystem(system), Identifier(id))),
+          driver
+        ).wasSuccessful match {
+          case true => println("Removed entry.")
+          case false => println("Entry was not removed. Not found?")
+        }
+
+    // Remove all entries for a system
+    case removeAllEntries(system) =>
+      await[RemoveAllEntriesResponse](
+          RemoveAllEntriesRequest(SSystem(system)),
+          driver
+        ).wasSuccessful match {
+          case true => println("Entries removed.")
+          case false => println("Entries were not removed. System not found?")
+        }
+
+    // Download the current list of entries
+    case "download" =>
+      val ret = await[DownloadEntriesResponse](
+          DownloadEntriesRequest,
+          driver
+        ).entries
+      val selection = new StringSelection(ret.mkString(""))
+      Toolkit.getDefaultToolkit.getSystemClipboard.setContents(selection, selection)
+      println("All entries copied to clipboard.")
+
+    case "save" =>
+      val ret = await[Message](SaveRequest, driver)
+      println(ret.contents)
+
+    // Default and unknown case
+    case _ => println("Unknown input, try again.")
+  }) match {
+    case Success(_) =>
+    case Failure(ex) =>
+      println("Failed parsing input.")
   }
 
   def formatAndPrint(entries: List[AnomalyEntry]) = {
